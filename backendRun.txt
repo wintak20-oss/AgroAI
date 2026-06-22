@@ -1,0 +1,24 @@
+wsl
+cd /mnt/c/AgroAI/agro-ai-backend
+docker-compose up --build
+  #cleaning and re-building
+docker-compose down
+   #if something stuck
+docker stop $(docker ps -q)
+#This removes old broken builds:
+docker system prune -a -f
+#If you also want to remove volumes (⚠️ deletes DB data):
+docker system prune -a --volumes -f
+3. DELETE OLD IMAGES (optional but clean)
+docker images
+docker rmi -f $(docker images -q)
+#to see the project structure
+ls
+5. REBUILD FROM ZERO
+docker-compose up --build
+⚡ RECOMMENDED CLEAN START COMMAND (BEST PRACTICE)
+Run this sequence:
+docker-compose down
+docker system prune -a -f
+docker-compose build --no-cache
+docker-compose up

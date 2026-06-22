@@ -1,0 +1,16 @@
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+
+pillow==10.4.0
+
+numpy==1.26.4
+tflite-runtime==2.14.0
+
+setuptools==70.0.0

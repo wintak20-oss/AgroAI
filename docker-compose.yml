@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+
+  backend:
+    build: .
+    container_name: agro_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+      - ./ml_models:/app/ml_models
+    depends_on:
+      - db
+    networks:
+      - agro_net
+
+  db:
+    image: postgres:15
+    container_name: agro_db
+    restart: always
+    environment:
+      POSTGRES_USER: agro
+      POSTGRES_PASSWORD: agro123
+      POSTGRES_DB: agrodb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - agro_net
+
+  nginx:
+    image: nginx:latest
+    container_name: agro_nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    networks:
+      - agro_net
+
+volumes:
+  postgres_data:
+
+networks:
+  agro_net:
+    driver: bridge

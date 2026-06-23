@@ -1,67 +1,64 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import json
+import asyncio
 
 router = APIRouter()
 
-
 # =========================
-# CONNECTION MANAGER (ENTERPRISE VERSION)
+# ACTIVE CLIENT MANAGER
 # =========================
 class ConnectionManager:
     def __init__(self):
-        # user_email -> [websockets]
-        self.active_connections: dict[str, list] = {}
+        self.active_connections: list[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket, user_id: str = "anonymous"):
+    async def connect(self, websocket: WebSocket):
         await websocket.accept()
-
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-
-        self.active_connections[user_id].append(websocket)
+        self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        for user_id, sockets in self.active_connections.items():
-            if websocket in sockets:
-                sockets.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
-                if not sockets:
-                    del self.active_connections[user_id]
-                break
+    async def send_personal_message(self, message: dict, websocket: WebSocket):
+        await websocket.send_text(json.dumps(message))
 
-    async def send_to_user(self, user_id: str, message: dict):
-        sockets = self.active_connections.get(user_id, [])
-        for conn in sockets:
-            await conn.send_json(message)
+    async def broadcast(self, data: dict):
+        dead = []
 
-    async def broadcast(self, message: dict):
-        for sockets in self.active_connections.values():
-            for conn in sockets:
-                await conn.send_json(message)
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(json.dumps(data))
+            except Exception:
+                dead.append(connection)
+
+        for d in dead:
+            self.disconnect(d)
 
 
 manager = ConnectionManager()
 
-
 # =========================
-# LIVE DASHBOARD SOCKET
+# WEBSOCKET ENDPOINT
 # =========================
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-
-    # optional query param: ?user=email
-    user_id = websocket.query_params.get("user", "anonymous")
-
-    await manager.connect(websocket, user_id)
+@router.websocket("/analytics")
+async def analytics_socket(websocket: WebSocket):
+    await manager.connect(websocket)
 
     try:
         while True:
-            data = await websocket.receive_text()
-
-            # echo back OR dashboard updates
-            await manager.send_to_user(user_id, {
-                "event": "message",
-                "data": data
-            })
+            # heartbeat ping
+            await asyncio.sleep(10)
+            await websocket.send_text(json.dumps({"type": "ping"}))
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+    except Exception:
+        manager.disconnect(websocket)
+
+
+# =========================
+# EXTERNAL BROADCAST FUNCTION
+# =========================
+async def broadcast_analytics(data: dict):
+    await manager.broadcast(data)

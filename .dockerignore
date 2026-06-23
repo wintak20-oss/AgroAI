@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+
+# Tests
+tests/
+pytest_cache/
+
+# Build artifacts
+build/
+dist/
+
+# Uploaded files (optional)
+uploads/
+
+# Flutter frontend (if backend repo contains frontend)
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.dart_tool/

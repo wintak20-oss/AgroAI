@@ -4,10 +4,11 @@ from app.database import Base
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    email = Column(String, unique=True, index=True)
-    password = Column(String)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password = Column(String, nullable=False)
     role = Column(String, default="farmer")
 
-    farm_id = Column(Integer, ForeignKey("farms.id"))
+    # FIX: make nullable to avoid FK crash
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=True)

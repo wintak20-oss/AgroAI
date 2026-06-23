@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
@@ -19,7 +19,6 @@ from app.auth.schemas import (
 )
 
 router = APIRouter()
-
 
 # =========================
 # DB
@@ -43,7 +42,10 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        raise HTTPException(400, "User already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already exists"
+        )
 
     user = User(
         name=data.name,
@@ -62,7 +64,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 
 # =========================
-# LOGIN
+# LOGIN (ENTERPRISE)
 # =========================
 @router.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
@@ -70,24 +72,31 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
 
     if not user or not verify_password(data.password, user.password):
-        raise HTTPException(401, "Invalid credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials"
+        )
 
     if not user.is_verified:
-        raise HTTPException(403, "Account not verified")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not verified"
+        )
 
-    access = create_access_token({
+    access_token = create_access_token({
         "sub": user.email,
         "role": user.role
     })
 
-    refresh = create_refresh_token({
+    refresh_token = create_refresh_token({
         "sub": user.email,
         "type": "refresh"
     })
 
+    # 🔥 SESSION TRACKING (ENTERPRISE FEATURE)
     session = RefreshTokenSession(
         user_email=user.email,
-        refresh_token=refresh,
+        refresh_token=refresh_token,
         expires_at=datetime.utcnow() + timedelta(days=7),
         revoked=False
     )
@@ -97,37 +106,65 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     return {
         "success": True,
-        "access_token": access,
-        "refresh_token": refresh,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "role": user.role
     }
 
 
 # =========================
-# REFRESH
+# REFRESH TOKEN ROTATION (IMPORTANT)
 # =========================
 @router.post("/refresh")
 def refresh(data: RefreshRequest, db: Session = Depends(get_db)):
 
     payload = decode_token(data.token)
 
-    if not payload or payload.get("type") != "refresh":
-        raise HTTPException(401, "Invalid refresh token")
+    if not payload:
+        raise HTTPException(401, "Invalid token")
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(401, "Not a refresh token")
 
     session = db.query(RefreshTokenSession).filter(
-        RefreshTokenSession.refresh_token == data.token,
-        RefreshTokenSession.revoked == False
+        RefreshTokenSession.refresh_token == data.token
     ).first()
 
-    if not session:
-        raise HTTPException(401, "Session expired")
+    if not session or session.revoked:
+        raise HTTPException(401, "Session expired or revoked")
 
+    if session.expires_at < datetime.utcnow():
+        raise HTTPException(401, "Refresh token expired")
+
+    # 🔥 ROTATE REFRESH TOKEN (VERY IMPORTANT SECURITY LAYER)
     new_access = create_access_token({
         "sub": payload["sub"],
         "role": payload.get("role", "farmer")
     })
 
-    return {"access_token": new_access}
+    new_refresh = create_refresh_token({
+        "sub": payload["sub"],
+        "type": "refresh"
+    })
+
+    # revoke old session
+    session.revoked = True
+
+    # create new session
+    new_session = RefreshTokenSession(
+        user_email=payload["sub"],
+        refresh_token=new_refresh,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+        revoked=False
+    )
+
+    db.add(new_session)
+    db.commit()
+
+    return {
+        "access_token": new_access,
+        "refresh_token": new_refresh
+    }
 
 
 # =========================
@@ -144,4 +181,4 @@ def logout(data: RefreshRequest, db: Session = Depends(get_db)):
         session.revoked = True
         db.commit()
 
-    return {"message": "Logged out"}
+    return {"message": "Logged out successfully"}

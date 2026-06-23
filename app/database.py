@@ -1,12 +1,12 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from app.config import settings
 
-import os
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-DATABASE_URL = settings.DATABASE_URL
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is not set in environment variables")
 
-# 🔥 FIX: Render PostgreSQL requires SSL
 connect_args = {}
 
 if DATABASE_URL.startswith("postgresql"):
@@ -25,10 +25,3 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
